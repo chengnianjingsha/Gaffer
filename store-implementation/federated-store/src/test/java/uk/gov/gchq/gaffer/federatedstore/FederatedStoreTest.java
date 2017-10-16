@@ -27,6 +27,7 @@ import org.mockito.Mockito;
 
 import uk.gov.gchq.gaffer.accumulostore.SingleUseAccumuloStore;
 import uk.gov.gchq.gaffer.commonutil.CommonTestConstants;
+import uk.gov.gchq.gaffer.commonutil.JsonUtil;
 import uk.gov.gchq.gaffer.commonutil.StreamUtil;
 import uk.gov.gchq.gaffer.commonutil.iterable.CloseableIterable;
 import uk.gov.gchq.gaffer.commonutil.pair.Pair;
@@ -80,6 +81,7 @@ public class FederatedStoreTest {
     public static final String PATH_ACC_STORE_PROPERTIES = "properties/singleUseMockAccStore.properties";
     public static final String PATH_MAP_STORE_PROPERTIES = "properties/singleUseMockMapStore.properties";
     public static final String PATH_MAP_STORE_PROPERTIES_ALT = "properties/singleUseMockMapStoreAlt.properties";
+    public static final String PATH_PROXY_STORE_PROPERTIES = "properties/ProxyStoreTest.properties";
     public static final String PATH_BASIC_ENTITY_SCHEMA_JSON = "schema/basicEntitySchema.json";
     public static final String PATH_BASIC_EDGE_SCHEMA_JSON = "schema/basicEdgeSchema.json";
     public static final String PATH_INVALID = "nothing.json";
@@ -988,20 +990,41 @@ public class FederatedStoreTest {
     }
 
     @Test
-    public void testFedStoreProxyStore() throws Exception {
+    public void testFederatedStoreAddingGraphWithProxyStore() throws Exception {
+        // Given
         final Schema schema = new Schema.Builder()
                 .id(SCHEMA_ID_1)
                 .json(StreamUtil.openStream(this.getClass(), PATH_BASIC_ENTITY_SCHEMA_JSON))
                 .build();
-        final StoreProperties storeProperties = StoreProperties.loadStoreProperties(StreamUtil.openStream(this.getClass(), "properties/ProxyStoreTest.properties"));
-        SingleUseMapProxyStore singleUseMapProxyStore = new SingleUseMapProxyStore();
+
+        final StoreProperties storeProperties = StoreProperties.loadStoreProperties(StreamUtil.openStream(this.getClass(), PATH_PROXY_STORE_PROPERTIES));
+        storeProperties.setId(PROPS_ID_1);
+
+        final SingleUseMapProxyStore singleUseMapProxyStore = new SingleUseMapProxyStore();
         singleUseMapProxyStore.initialise("testGraphId", schema, storeProperties);
+
+        HashMapGraphLibrary graphLibrary = new HashMapGraphLibrary();
+
+        store.initialise(FEDERATED_STORE_ID, null, federatedProperties);
+        store.setGraphLibrary(graphLibrary);
+
         Graph graph = new Graph.Builder()
                 .config(new GraphConfig.Builder()
                         .graphId("testGraphId")
+                        .library(graphLibrary)
                         .build())
                 .store(singleUseMapProxyStore)
                 .build();
+
+        // When
+        store.addGraphs(Sets.newHashSet(ALL_USERS), null, graph);
+
+        // Then
+        assertEquals(new Pair(SCHEMA_ID_1, PROPS_ID_1), store.getGraphLibrary().getIds("testGraphId"));
+        assertTrue(JsonUtil.equals(store.getGraphLibrary().getSchema(SCHEMA_ID_1).toJson(false), schema.toJson(false)));
+        assertTrue(store.getGraphLibrary().getProperties(PROPS_ID_1).getProperties().equals(storeProperties.getProperties()));
+
+        // Finally
         singleUseMapProxyStore.cleanUp();
     }
 
