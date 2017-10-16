@@ -20,10 +20,13 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
 
 import uk.gov.gchq.gaffer.accumulostore.SingleUseAccumuloStore;
+import uk.gov.gchq.gaffer.commonutil.CommonTestConstants;
 import uk.gov.gchq.gaffer.commonutil.StreamUtil;
 import uk.gov.gchq.gaffer.commonutil.iterable.CloseableIterable;
 import uk.gov.gchq.gaffer.commonutil.pair.Pair;
@@ -40,6 +43,7 @@ import uk.gov.gchq.gaffer.mapstore.MapStore;
 import uk.gov.gchq.gaffer.mapstore.MapStoreProperties;
 import uk.gov.gchq.gaffer.operation.impl.add.AddElements;
 import uk.gov.gchq.gaffer.operation.impl.get.GetAllElements;
+import uk.gov.gchq.gaffer.proxystore.SingleUseMapProxyStore;
 import uk.gov.gchq.gaffer.store.Context;
 import uk.gov.gchq.gaffer.store.StoreException;
 import uk.gov.gchq.gaffer.store.StoreProperties;
@@ -90,6 +94,9 @@ public class FederatedStoreTest {
 
     FederatedStore store;
     private FederatedStoreProperties federatedProperties;
+
+    @Rule
+    public final TemporaryFolder testFolder = new TemporaryFolder(CommonTestConstants.TMP_DIRECTORY);
 
     @Before
     public void setUp() throws Exception {
@@ -978,6 +985,24 @@ public class FederatedStoreTest {
         assertTrue(returnedGraphs.size() == 1);
         assertTrue(returnedGraphs.containsAll(expectedGraphs));
         assertFalse(checkUnexpected(unexpectedGraphs, returnedGraphs));
+    }
+
+    @Test
+    public void testFedStoreProxyStore() throws Exception {
+        final Schema schema = new Schema.Builder()
+                .id(SCHEMA_ID_1)
+                .json(StreamUtil.openStream(this.getClass(), PATH_BASIC_ENTITY_SCHEMA_JSON))
+                .build();
+        final StoreProperties storeProperties = StoreProperties.loadStoreProperties(StreamUtil.openStream(this.getClass(), "properties/ProxyStoreTest.properties"));
+        SingleUseMapProxyStore singleUseMapProxyStore = new SingleUseMapProxyStore();
+        singleUseMapProxyStore.initialise("testGraphId", schema, storeProperties);
+        Graph graph = new Graph.Builder()
+                .config(new GraphConfig.Builder()
+                        .graphId("testGraphId")
+                        .build())
+                .store(singleUseMapProxyStore)
+                .build();
+        singleUseMapProxyStore.cleanUp();
     }
 
     private boolean checkUnexpected(final Collection<Graph> unexpectedGraphs, final Collection<Graph> returnedGraphs) {
